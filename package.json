@@ -1,0 +1,99 @@
+{
+  "name": "deepseek-balance-monitor",
+  "displayName": "DeepSeek Balance Monitor",
+  "version": "1.0.0",
+  "description": "Real-time DeepSeek API balance, token usage, cache hit rate & cost monitoring in VS Code status bar and dashboard",
+  "publisher": "deepseek-balance-monitor",
+  "icon": "media/icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/deepseek-balance-monitor/deepseek-balance-monitor"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Data Science",
+    "Other"
+  ],
+  "keywords": [
+    "deepseek",
+    "balance",
+    "token",
+    "usage",
+    "monitoring",
+    "api",
+    "cost",
+    "dashboard"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "deepseekBalance.showDashboard", "title": "显示用量面板", "icon": "$(dashboard)" },
+      { "command": "deepseekBalance.refreshBalance", "title": "立即刷新", "icon": "$(refresh)" },
+      { "command": "deepseekBalance.setApiKey", "title": "设置 API Key", "icon": "$(key)" },
+      { "command": "deepseekBalance.clearApiKey", "title": "清除 API Key", "icon": "$(trash)" },
+      { "command": "deepseekBalance.setCookie", "title": "手动输入 Cookie", "icon": "$(shield)" },
+      { "command": "deepseekBalance.autoExtractCookie", "title": "自动从浏览器提取 Cookie", "icon": "$(cloud-download)" },
+      { "command": "deepseekBalance.clearCookie", "title": "清除 Cookie", "icon": "$(close)" },
+      { "command": "deepseekBalance.syncPlaywright", "title": "Playwright 自动同步", "icon": "$(sync)" }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "deepseekBalance.showDashboard", "when": "true" },
+        { "command": "deepseekBalance.refreshBalance", "when": "true" },
+        { "command": "deepseekBalance.setApiKey", "when": "true" },
+        { "command": "deepseekBalance.clearApiKey", "when": "true" },
+        { "command": "deepseekBalance.autoExtractCookie", "when": "true" },
+        { "command": "deepseekBalance.setCookie", "when": "true" },
+        { "command": "deepseekBalance.clearCookie", "when": "true" },
+        { "command": "deepseekBalance.syncPlaywright", "when": "true" }
+      ]
+    },
+    "configuration": {
+      "title": "DeepSeek Balance Monitor",
+      "properties": {
+        "deepseekBalance.refreshIntervalSeconds": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 30,
+          "maximum": 3600,
+          "markdownDescription": "Seconds between automatic balance checks. Minimum 30 seconds."
+        },
+        "deepseekBalance.lowBalanceThresholdCNY": {
+          "type": "number",
+          "default": 5.0,
+          "minimum": 0,
+          "markdownDescription": "Warn when total balance (CNY) falls below this threshold."
+        },
+        "deepseekBalance.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the current balance in the VS Code Status Bar."
+        },
+        "deepseekBalance.requestTimeoutMs": {
+          "type": "integer",
+          "default": 10000,
+          "minimum": 3000,
+          "maximum": 30000,
+          "markdownDescription": "HTTP request timeout in milliseconds."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "echo No linter configured yet"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}
