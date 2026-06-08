@@ -11,19 +11,14 @@
 - 🎯 **缓存命中率** — 输入缓存命中/未命中统计
 - 📈 **趋势图表** — 每日 Token 热力图、余额趋势
 - 🏷️ **模型明细** — 按模型拆分今日费用
-- 🔄 **自动刷新** — 可配置间隔（默认 5 分钟）
+- 🔄 **自动刷新** — 仪表盘一键切换 10s / 30s / 1m / 5m / 10m / 30m
 
 ## 安装
 
-### VS Code Marketplace
+### 手动安装（.vsix）
+下载 [Releases](https://github.com/2731350936/deepseek-balance-monitor/releases) 中的 `.vsix` 文件：
 ```
-code --install-extension deepseek-balance-monitor
-```
-
-### 手动安装
-下载 [Releases](https://github.com/your/repo/releases) 中的 `.vsix` 文件：
-```
-code --install-extension deepseek-balance-monitor-1.0.0.vsix
+code --install-extension deepseek-balance-monitor-1.1.0.vsix
 ```
 
 ## 配置
@@ -36,12 +31,9 @@ code --install-extension deepseek-balance-monitor-1.0.0.vsix
 ### 2. 平台认证（Token 用量需要）
 
 **★ 推荐 — Playwright 自动同步（全自动，含 HttpOnly Cookie）：**
-```powershell
-# 一次性安装
-npm install -g playwright
-npx playwright install chromium
-```
-然后点仪表盘里的 "🔐 Playwright 自动登录"。首次登录后，可设置 Windows 定时任务全自动续期：
+点击仪表盘里的 "🔐 Playwright 自动登录" 按钮，**首次点击会自动安装** Playwright + Chromium（约 170 MB，仅一次），无需手动执行任何命令。登录后浏览器 Profile 持久化，几周才需重新登录一次。
+
+如需定时全自动续期：
 ```powershell
 schtasks /create /tn "DeepSeekAuthSync" /tr "node '路径\scripts\sync-playwright.js'" /sc hourly /mo 4
 ```
@@ -63,12 +55,22 @@ schtasks /create /tn "DeepSeekAuthSync" /tr "node '路径\scripts\sync-playwrigh
 ## 开发
 
 ```powershell
-git clone <repo>
+git clone https://github.com/2731350936/deepseek-balance-monitor.git
 cd deepseek-balance-monitor
 npm install
 npm run compile
 # F5 启动调试
 ```
+
+## Changelog
+
+### v1.1.0
+- ✨ 仪表盘新增**刷新间隔切换器**：10s / 30s / 1m / 5m / 10m / 30m 一键切换
+- ✨ **Playwright 自动安装**：首次点击"Playwright 自动登录"自动安装依赖，无需手动执行命令
+- 🔧 最小刷新间隔从 30s 降至 10s
+
+### v1.0.0
+- 初始版本
 
 ## 许可
 

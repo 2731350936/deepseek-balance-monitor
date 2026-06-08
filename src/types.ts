@@ -123,6 +123,7 @@ export type ToWebviewMessage =
   | { type: 'updateUsage'; data: UsageData; userSummary: UserSummary; platformReachable: boolean }
   | { type: 'apiKeyStatus'; configured: boolean }
   | { type: 'cookieStatus'; configured: boolean; lastUpdated: string | null }
+  | { type: 'configUpdate'; refreshIntervalSeconds: number }
   | { type: 'error'; message: string };
 
 /** Messages sent from webview to extension (postMessage) */
@@ -134,6 +135,7 @@ export type FromWebviewMessage =
   | { type: 'inputCookie' }
   | { type: 'clearCookie' }
   | { type: 'syncPlaywright' }
+  | { type: 'setRefreshInterval'; seconds: number }
   | { type: 'webviewReady' };
 
 /** Error categories for the API layer */

@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import * as http from 'http';
 import * as path from 'path';
+import * as cp from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
 import { StatusBarManager } from './statusbar/statusBarManager';
 import { DashboardPanel } from './webview/dashboardPanel';
 import { IntervalTimer } from './timer/intervalTimer';
@@ -30,6 +33,111 @@ let hasCookie = false;
 let platformReachable = false;
 let cookieLastUpdated: string | null = null;
 const COOKIE_TIMESTAMP_KEY = 'deepseekBalance.cookieLastUpdated';
+
+// ---------------------------------------------------------------
+//  Playwright auto-install helpers
+// ---------------------------------------------------------------
+
+function findPlaywrightModulePath(): string | null {
+  // Try local (development) resolution first
+  try {
+    return require.resolve('playwright');
+  } catch { /* not in local node_modules */ }
+
+  // Search global npm paths
+  let globalRoot = '';
+  try {
+    globalRoot = cp.execSync('npm root -g', { encoding: 'utf8', timeout: 5000 }).trim();
+  } catch { /* ignore */ }
+
+  const searchPaths = [
+    globalRoot,
+    path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules'),
+    path.join(os.homedir(), 'AppData', 'Local', 'pnpm', 'global', '5', 'node_modules'),
+    '/usr/local/lib/node_modules',
+    '/usr/lib/node_modules',
+  ].filter(Boolean);
+
+  for (const p of searchPaths) {
+    const playwrightPath = path.join(p, 'playwright');
+    if (fs.existsSync(playwrightPath)) {
+      return playwrightPath;
+    }
+  }
+  return null;
+}
+
+function findChromiumCache(): string | null {
+  const cacheBases = [
+    // macOS
+    path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright'),
+    // Windows
+    path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'ms-playwright'),
+    // Linux
+    path.join(os.homedir(), '.cache', 'ms-playwright'),
+  ];
+  for (const base of cacheBases) {
+    if (!fs.existsSync(base)) continue;
+    let entries: string[] = [];
+    try {
+      entries = fs.readdirSync(base);
+    } catch { continue; }
+    if (entries.some(e => e.startsWith('chromium-'))) {
+      return base;
+    }
+  }
+  return null;
+}
+
+function execCommand(command: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    cp.exec(command, { timeout: 300000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) reject(new Error(stderr || err.message));
+      else resolve(stdout);
+    });
+  });
+}
+
+async function ensurePlaywright(): Promise<boolean> {
+  const pwPath = findPlaywrightModulePath();
+  const chromiumCache = findChromiumCache();
+
+  if (pwPath && chromiumCache) {
+    // Everything already installed — fast path
+    return true;
+  }
+
+  // Need to install something — show progress
+  return await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: 'DeepSeek Monitor',
+      cancellable: false,
+    },
+    async (progress): Promise<boolean> => {
+      try {
+        if (!pwPath) {
+          progress.report({ message: '安装 Playwright（约 2 MB）...' });
+          await execCommand('npm install -g playwright');
+        }
+
+        if (!chromiumCache) {
+          progress.report({ message: '下载 Chromium 浏览器（约 170 MB，仅首次下载）...' });
+          await execCommand('npx playwright install chromium');
+        }
+
+        vscode.window.showInformationMessage('✅ Playwright 安装完成，正在启动浏览器...');
+        return true;
+      } catch (err) {
+        const msg = (err as Error).message || '';
+        console.error('[deepseek] Playwright install error:', msg);
+        return false;
+      }
+    }
+  );
+}
+
+// ---------------------------------------------------------------
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   statusBar = new StatusBarManager('deepseekBalance.showDashboard');
@@ -128,8 +236,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       notifyDashboard(context, { type: 'apiKeyStatus', configured: false });
     }),
 
-    // Playwright auto-sync
+    // Playwright auto-sync (with auto-install)
     vscode.commands.registerCommand('deepseekBalance.syncPlaywright', async () => {
+      const ready = await ensurePlaywright();
+      if (!ready) {
+        const action = await vscode.window.showErrorMessage(
+          'Playwright 自动安装失败。请手动执行以下命令后重试：\nnpm install -g playwright\nnpx playwright install chromium',
+          '复制命令', '取消'
+        );
+        if (action === '复制命令') {
+          await vscode.env.clipboard.writeText('npm install -g playwright && npx playwright install chromium');
+          vscode.window.showInformationMessage('命令已复制到剪贴板');
+        }
+        return;
+      }
+
       const scriptPath = path.join(context.extensionPath, 'scripts', 'sync-playwright.js');
       const terminal = vscode.window.createTerminal('DeepSeek Auth Sync');
       terminal.show();
@@ -162,6 +283,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const nc = getExtensionConfig();
         statusBar.setVisibility(nc.showStatusBar);
         timer.start(() => doRefresh(context), nc.refreshIntervalMs);
+        // Notify webview of the new interval
+        const panel = DashboardPanel.currentPanel;
+        if (panel && panel.isActive()) {
+          panel.postMessage({ type: 'configUpdate', refreshIntervalSeconds: nc.refreshIntervalMs / 1000 });
+        }
       }
     })
   );
@@ -274,10 +400,16 @@ function setupPanelMessageHandler(context: vscode.ExtensionContext, panel: Dashb
       case 'inputCookie': await vscode.commands.executeCommand('deepseekBalance.setCookie'); break;
       case 'clearCookie': await vscode.commands.executeCommand('deepseekBalance.clearCookie'); break;
       case 'syncPlaywright': await vscode.commands.executeCommand('deepseekBalance.syncPlaywright'); break;
+      case 'setRefreshInterval':
+        await vscode.workspace.getConfiguration('deepseekBalance').update(
+          'refreshIntervalSeconds', msg.seconds, vscode.ConfigurationTarget.Global
+        );
+        break;
       case 'webviewReady':
         pushAllDataToPanel(context);
         panel.postMessage({ type: 'apiKeyStatus', configured: hasCookie });
         panel.postMessage({ type: 'cookieStatus', configured: hasCookie, lastUpdated: cookieLastUpdated });
+        panel.postMessage({ type: 'configUpdate', refreshIntervalSeconds: getExtensionConfig().refreshIntervalMs / 1000 });
         break;
     }
   });
